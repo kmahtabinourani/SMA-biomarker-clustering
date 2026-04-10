@@ -56,14 +56,14 @@ These findings suggest that combining biomarkers can help identify more specific
 
 ## 📥 Input Data
 
-The analysis is based on normalized gene expression data obtained from publicly available datasets. The data is preprocessed to extract expression profiles for SMA-related conditions and corresponding controls.
+The analysis is based on normalized gene expression data obtained from publicly available datasets (GSE174056). The data is preprocessed to extract expression profiles for SMA-related conditions and corresponding controls.
 
 ---
 
 ## ▶️ How to Run
 
 1. Run: 01_compute_coexpression_by_biomarker.m
-2. 2. Then run: 02_generate_biomarker_clusters.m
+2. Then run: 02_generate_biomarker_clusters.m
 3. Outputs will be generated and saved in the `results/` directory.
 
 ---
