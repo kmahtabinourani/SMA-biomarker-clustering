@@ -1,0 +1,127 @@
+%% 02_generate_biomarker_clusters
+% This script generates biomarker-informed gene clusters based on
+% correlation values computed from the co-expression analysis step.
+%
+% Workflow:
+% 1. Load Control and SMA correlation tables
+% 2. Define seven biomarker-based cluster combinations
+% 3. Compute average correlation for each combination
+% 4. Select genes above the chosen threshold
+% 5. Save cluster gene lists and visualization figures
+%
+% Expected input:
+%   outputs/Control_CrossCorr.csv
+%   outputs/SMA_CrossCorr.csv
+%
+% Output files:
+%   outputs/clusters/Control_<ClusterName>_ClusterGenes.csv
+%   outputs/clusters/SMA_<ClusterName>_ClusterGenes.csv
+%   outputs/clusters/Control_<ClusterName>_Cluster.png
+%   outputs/clusters/SMA_<ClusterName>_Cluster.png
+
+clc;
+clear;
+close all;
+
+%% ===================== USER SETTINGS =====================
+inputDir = 'outputs';
+outputDir = fullfile('outputs', 'clusters');
+
+% Correlation threshold for assigning genes to clusters
+% A threshold of 0.5 was selected to allow construction of all seven clusters.
+threshold = 0.5;
+
+% Biomarker names corresponding to columns in the correlation tables
+biomarkerNames = {'NfL', 'HSPA7', 'SMN2'};
+
+% Cluster combinations using biomarker column positions
+clusterCombinations = {
+    1,       'NfL';
+    2,       'HSPA7';
+    3,       'SMN2';
+    [1, 2],  'NfL+HSPA7';
+    [1, 3],  'NfL+SMN2';
+    [2, 3],  'HSPA7+SMN2';
+    [1, 2, 3], 'NfL+HSPA7+SMN2'
+};
+
+%% ===================== SETUP =====================
+if ~exist(outputDir, 'dir')
+    mkdir(outputDir);
+end
+
+%% ===================== LOAD INPUT TABLES =====================
+controlCorr = readtable(fullfile(inputDir, 'Control_CrossCorr.csv'));
+smaCorr     = readtable(fullfile(inputDir, 'SMA_CrossCorr.csv'));
+
+% Columns containing biomarker correlation values
+% Column 1 = Gene_ID
+% Columns 2:4 = NfL, HSPA7, SMN2
+biomarkerCols = 2:4;
+
+%% ===================== GENERATE CLUSTERS =====================
+generateClusters(controlCorr, 'Control', biomarkerCols, clusterCombinations, threshold, outputDir);
+generateClusters(smaCorr, 'SMA', biomarkerCols, clusterCombinations, threshold, outputDir);
+
+disp('Biomarker-based clustering completed successfully.');
+
+%% ===================== LOCAL FUNCTION =====================
+function generateClusters(corrTable, groupName, biomarkerCols, clusterCombinations, threshold, outputDir)
+
+    for i = 1:size(clusterCombinations, 1)
+        selectedCols = clusterCombinations{i, 1};
+        clusterLabel = clusterCombinations{i, 2};
+
+        % Compute average correlation across the selected biomarker combination
+        avgCorr = mean(corrTable{:, biomarkerCols(selectedCols)}, 2);
+
+        % Select genes above the threshold
+        selectedGenes = find(avgCorr >= threshold);
+
+        % Skip empty clusters
+        if isempty(selectedGenes)
+            warning('%s - %s: No genes found above threshold %.2f.', ...
+                groupName, clusterLabel, threshold);
+            continue;
+        end
+
+        geneNames = string(corrTable.Gene_ID(selectedGenes));
+        numGenes = numel(selectedGenes);
+
+        %% -------- Save cluster gene list --------
+        clusterTable = table(geneNames, avgCorr(selectedGenes), ...
+            'VariableNames', {'Gene_ID', 'AverageCorrelation'});
+
+        writetable(clusterTable, ...
+            fullfile(outputDir, [groupName '_' clusterLabel '_ClusterGenes.csv']));
+
+        %% -------- Generate cluster plot --------
+        figure('Name', [groupName ' Cluster: ' clusterLabel], 'NumberTitle', 'off');
+
+        % Random 2D layout for visualization only
+        x = randn(numGenes, 1);
+        y = randn(numGenes, 1);
+
+        scatter(x, y, 30, 'filled');
+        hold on;
+        scatter(0, 0, 100, 'filled'); % Biomarker reference center
+
+        title([groupName ' Cluster: ' clusterLabel ' (n=' num2str(numGenes) ')'], ...
+            'FontWeight', 'bold');
+        legend('Correlated Genes', 'Biomarker Center', 'Location', 'best');
+        axis off;
+
+        % Optional interactive gene names in data tips
+        s = findobj(gca, 'Type', 'Scatter');
+        if ~isempty(s)
+            dtt = s(1).DataTipTemplate;
+            geneRow = dataTipTextRow('Gene', geneNames);
+            dtt.DataTipRows(end+1) = geneRow;
+        end
+
+        saveas(gcf, fullfile(outputDir, [groupName '_' clusterLabel '_Cluster.png']));
+        close(gcf);
+
+        fprintf('%s - %s: %d genes saved.\n', groupName, clusterLabel, numGenes);
+    end
+end
